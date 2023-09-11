@@ -1,0 +1,48 @@
+#include <Arduino.h>
+
+char mystr0[10] = "Farah"; //String data
+char mystr1[10] = "Aqila"; //String data
+
+///////
+char moveDecCro[12] = "moveDecCro";
+char moveDecSmo[12] = "moveDecSmo";
+char moveIncCro[12] = "moveIncCro";
+char moveIncSmo[12] = "moveIncSmo";
+char runInc[12] = "runInc";
+char runDec[12] = "runDec";
+char stop[12] = "stop";
+char reset[12] = "reset";
+///////
+
+void setup() {
+  // Begin the Serial at 9600 Baud
+  Serial.begin(115200);
+}
+
+void loop() {
+  Serial.write(moveDecCro,12);
+  delay(100);
+  Serial.write(moveDecSmo,12);
+  delay(100);
+  Serial.write(moveIncCro,12);
+  delay(100);
+  Serial.write(moveIncSmo,12);
+  delay(100);
+  Serial.write(runInc,12);
+  delay(100);
+  Serial.write(runDec,12);
+  delay(100);
+  Serial.write(stop,12);
+  delay(100);
+  Serial.write(reset,12);
+  delay(100);
+  Serial.write(reset,12);
+  delay(100);
+
+  // Serial.print(1);
+  // delay(500);
+  // Serial.print(2);
+  // delay(500);
+  // Serial.print(3);
+  // delay(500);
+}

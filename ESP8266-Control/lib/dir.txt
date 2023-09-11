@@ -1,0 +1,37 @@
+esp32 setup to nextion interface
+https://nextion.ca/portfolio-items/nextion-iteadlib-and-esp32-step-by-step/
+
+multiple wifi credential
+https://forum.arduino.cc/t/multiple-wifi-credentials/437708/11
+
+hold max and min value
+https://forum.arduino.cc/t/how-to-hold-peak-value/430617
+
+ota
+https://randomnerdtutorials.com/esp8266-nodemcu-ota-over-the-air-arduino/
+
+rms measurement
+https://electropeak.com/learn/interfacing-zmpt101b-voltage-sensor-with-arduino/
+https://www.engineersgarage.com/arduino-based-voltmeter/
+
+float value nextion
+https://www.youtube.com/watch?v=dMXFaV2q1fY
+
+adc smoothing hardware
+https://www.esp32.com/viewtopic.php?t=5845
+https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/adc.html#adc-api-adc-calibration
+
+sensor arus
+https://www.rdd-tech.com/product/hall-effect-current-sensor-tkc200bsr5-200a
+
+software smoothing
+https://www.arduino.cc/en/Tutorial/BuiltInExamples/Smoothing
+
+software serial
+https://solarduino.com/how-to-add-or-increase-serial-ports-for-nodemcu-using-esp-software-serial-library/
+
+software serial to nextion
+https://create.arduino.cc/projecthub/tsavascii/nextion-lcd-communicate-with-arduino-uno-188a44
+
+pinout
+https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/

@@ -1,0 +1,111 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <Adafruit_ADS1X15.h>
+
+Adafruit_ADS1115 ads1;  // current measurement
+Adafruit_ADS1115 ads2;  // voltage measurement
+int16_t adcCurrent, adcVoltage;
+
+int n = 100;
+int currentValue = 0;
+double analogCurrentValue = 0;
+int voltageValue = 0;
+double analogVoltageValue = 0;
+
+const int numReadings = 4;
+int readings_current[numReadings];
+int readIndex_current = 0;
+double total_current = 0;
+double average_current = 0;
+// int realCurrent = 0;
+int readings_voltage[numReadings];
+int readIndex_voltage = 0;
+double total_voltage = 0;
+double average_voltage = 0;
+// int realVoltage = 0;
+
+#define relay1 23
+#define LED 2
+
+void setup(void) {
+  Serial.begin(115200);
+
+  //                                                                ADS1015  ADS1115
+  //                                                                -------  -------
+  // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
+  // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
+  // ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
+  // ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
+  // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
+  // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
+
+  ads1.setGain(GAIN_TWO);
+  ads2.setGain(GAIN_SIXTEEN);
+  ads1.begin(0x48);
+  ads2.begin(0x49);
+
+  pinMode(relay1, OUTPUT);
+  
+  for (int thisReading_current = 0; thisReading_current < numReadings; thisReading_current ++) {
+    readings_current[thisReading_current] = 0;
+  }
+  for (int thisReading_voltage = 0; thisReading_voltage < numReadings; thisReading_voltage ++) {
+    readings_voltage[thisReading_voltage] = 0;
+  }
+}
+
+void loop(void) {
+  unsigned long time = millis();
+
+    adcCurrent = ads1.readADC_SingleEnded(1);
+    adcVoltage = ads2.readADC_SingleEnded(1);
+
+    int maxAnalogCurrentValue = 0;
+    int maxAnalogVoltageValue = 0;
+
+    for( int i = 0; i < n; i ++ ) {
+      adcCurrent = ads1.readADC_SingleEnded(1); // current measuremnet
+      currentValue = adcCurrent;
+      if (currentValue > maxAnalogCurrentValue) {
+        maxAnalogCurrentValue = currentValue;
+      }
+      adcVoltage = ads2.readADC_SingleEnded(1); // current measuremnet
+      voltageValue = adcVoltage;
+      if (voltageValue < maxAnalogVoltageValue) {
+        maxAnalogVoltageValue = voltageValue;
+      }
+    }
+
+    total_current = total_current - readings_current[readIndex_current];
+    readings_current[readIndex_current] = maxAnalogCurrentValue;
+    total_current = total_current + readings_current[readIndex_current];
+    readIndex_current = readIndex_current + 1;
+
+    if (readIndex_current >= numReadings) {
+      readIndex_current = 0;
+    }
+    maxAnalogCurrentValue = total_current / numReadings;
+
+    total_voltage = total_voltage - readings_voltage[readIndex_voltage];
+    readings_voltage[readIndex_voltage] = maxAnalogVoltageValue;
+    total_voltage = total_voltage + readings_voltage[readIndex_voltage];
+    readIndex_voltage = readIndex_voltage + 1;
+
+    if (readIndex_voltage >= numReadings) {
+      readIndex_voltage = 0;
+    }
+    maxAnalogVoltageValue = -1 * total_voltage / numReadings;
+
+    Serial.println(time);
+
+    Serial.print("Analog Arus: ");
+    Serial.println(maxAnalogCurrentValue);
+    // Serial.println(adcCurrent);
+    Serial.print("Analog Tegangan: ");
+    Serial.println(maxAnalogVoltageValue);
+    // Serial.println(adcVoltage);
+    Serial.println("");
+
+    digitalWrite(relay1, HIGH);
+    delay(100);
+}

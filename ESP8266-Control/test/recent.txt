@@ -1,0 +1,1026 @@
+/*
+left
+RESET
+GPIO 36   analog 4  //analogvol
+GPIO 39   analog 3  //analogcur
+GPIO 34   analog 2
+GPIO 35   analog 1
+GPIO 32   relay 4
+GPIO 33   relay 3
+GPIO 25   relay 2
+GPIO 26   relay 1
+GPIO 27   dht11
+GPIO 14   D1
+GPIO 12   A1
+GPIO 13   PWM
+
+right
+GPIO 23   primary switch
+GPIO 22   SCL
+GPIO 1    Tx
+GPIO 3    Rx
+GPIO 21   SDA
+GPIO 19   Txs
+GPIO 18   Rxs
+GPIO 5    secondary switch
+GPIO 17   Tx (nextion)
+GPIO 16   Rx (nextion)
+GPIO 4    analog current
+GPIO 2    led buildin
+GPIO 15   analog voltage
+*/
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <Update.h>
+#include "DHT.h"
+#include <Adafruit_Sensor.h>
+#include "Nextion.h"
+
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncElegantOTA.h>
+AsyncWebServer server(80);
+
+int ssidState = 0;
+
+// Define known network here
+const char* host = "esp32";
+const char* KNOWN_SSID[] = {"Nokia Deny", "INFORMATION CENTER", "Dasar", "Rumah no 30", "LAB-TTAT"};
+const char* KNOWN_PASSWORD[] = {"bismillah", "9000000000", "liquidgas", "heavyduty", "tegangantinggi"};
+const int   KNOWN_SSID_COUNT = sizeof(KNOWN_SSID) / sizeof(KNOWN_SSID[0]); // number of known networks
+
+#define DHTPIN 27
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+int analogVoltagePin = 36;
+int analogCurrentPin = 39;
+double analogVoltageValue = 0;
+double analogCurrentValue = 0;
+int voltageValue[100];
+int currentValue[100];
+int maxAnalogVoltageValue = 0;
+int maxAnalogCurrentValue = 0;
+double voltageRMS = 0;
+double currentRMS = 0;
+double holdMaxVoltage = -1;
+double holdMaxCurrent = -1;
+int decimalPrecision = 3;
+
+int currentPage = 0;
+
+int offsetVoltage = 0;
+int offsetCurrent = 0;
+
+#define RXD2 16
+#define TXD2 17
+
+const int SDApin = 22;
+const int SCLpin = 21;
+const int freq = 5000;
+const int channel = 0;
+const int resolution = 8;
+int dutyCycle0 = 0;
+int dutyCycleDriver = 190;
+int dutyCycleSoft = 210;
+int dutyCycleMod = 230;
+int dutyCycleRough = 250;
+
+const int relay1 = 26;
+const int relay2 = 25;
+const int relay3 = 33;
+const int relay4 = 32;
+int currentProtection = 10;
+
+//smoothing
+const int numReadings = 5;
+
+int readings_voltage[numReadings];
+int readIndex_voltage = 0;
+int total_voltage = 0;
+int average_voltage = 0;
+int realVoltage = 0;
+
+int readings_current[numReadings];
+int readIndex_current = 0;
+double total_current = 0;
+double average_current = 0;
+int realCurrent = 0;
+
+// Declare your Nextion objects - Example (page id = 0, component id = 1, component name = "b0") 
+// Page 0 = welcome page
+NexPage page0 = NexPage(0, 0, "page0");
+NexText tSSID = NexText(0, 5, "tSSID");
+NexText tAddress = NexText(0, 7, "tAddress");
+// Page 1 = introduction page
+NexPage page1 = NexPage(1, 0, "page1");
+// Page 2 = selection page
+NexPage page2 = NexPage(2, 0, "page2");
+NexButton bDriver = NexButton(2, 1, "bDriver");
+NexButton bKnob = NexButton(2, 2, "bKnob");
+NexButton bAdd = NexButton(2, 3, "bAdd");
+NexButton bSetting = NexButton(2, 9, "bSetting");
+NexButton bAwal = NexButton(2, 4, "bAwal");
+// Page 3 = driver mode
+NexPage page3 = NexPage(3, 0, "page3");
+NexText tVoltageP3 = NexText(3, 2, "tVoltageP3");
+NexText tCurrentP3 = NexText(3, 4, "tCurrentP3");
+NexButton bRstVoltageP3 = NexButton(3, 10, "bRstVoltageP3");
+NexButton bRstCurrentP3 = NexButton(3, 11, "bRstCurrentP3");
+NexText tMaxVoltageP3 = NexText(3, 6, "tMaxVoltageP3");
+NexText tMaxCurrentP3 = NexText(3, 9, "tMaxCurrentP3");
+NexText tkVP3 = NexText(3, 7, "tkVP3");
+NexText tAP3 = NexText(3, 8, "tAP3");
+NexText temP3 = NexText(3, 12, "temP3");
+NexText humP3 = NexText(3, 13, "humP3");
+NexButton bHomeP3 = NexButton(3, 1, "bHomeP3");
+// Page 4 = moderate page
+NexPage page4 = NexPage(4, 0, "page4");
+NexText tVoltageP4 = NexText(4, 4, "tVoltageP4");
+NexText tCurrentP4 = NexText(4, 6, "tCurrentP4");
+NexButton bRstVoltageP4 = NexButton(4, 12, "bRstVoltageP4");
+NexButton bRstCurrentP4 = NexButton(4, 13, "bRstCurrentP4");
+NexText tMaxVoltageP4 = NexText(4, 8, "tMaxVoltageP4");
+NexText tMaxCurrentP4 = NexText(4, 10, "tMaxCurrentP4");
+NexText tkVP4 = NexText(4, 9, "tkVP4");
+NexText tAP4 = NexText(4, 11, "tAP4");
+NexButton bSoftP4 = NexButton(4, 2, "bSoftP4");
+NexButton bRoughP4 = NexButton(4, 3, "bRoughP4");
+NexText temP4 = NexText(4, 14, "temP4");
+NexText humP4 = NexText(4, 15, "humP4");
+NexButton bHomeP4 = NexButton(4, 1, "bHomeP4");
+// Page 5 = soft page
+NexPage page5 = NexPage(5, 0, "page5");
+NexText tVoltageP5 = NexText(5, 4, "tVoltageP5");
+NexText tCurrentP5 = NexText(5, 6, "tCurrentP5");
+NexButton bRstVoltageP5 = NexButton(5, 12, "bRstVoltageP5");
+NexButton bRstCurrentP5 = NexButton(5, 13, "bRstCurrentP5");
+NexText tMaxVoltageP5 = NexText(5, 8, "tMaxVoltageP5");
+NexText tMaxCurrentP5 = NexText(5, 10, "tMaxCurrentP5");
+NexText tkVP5 = NexText(5, 9, "tkVP5");
+NexText tAP5 = NexText(5, 11, "tAP5");
+NexButton bModP5 = NexButton(5, 2, "bModP5");
+NexButton bRoughP5 = NexButton(5, 3, "bRoughP5");
+NexText temP5 = NexText(5, 14, "temP5");
+NexText humP5 = NexText(5, 15, "humP5");
+NexButton bHomeP5 = NexButton(5, 1, "bHomeP5");
+// Page 6 = rough page
+NexPage page6 = NexPage(6, 0, "page6");
+NexText tVoltageP6 = NexText(6, 4, "tVoltageP6");
+NexText tCurrentP6 = NexText(6, 6, "tCurrentP6");
+NexButton bRstVoltageP6 = NexButton(6, 12, "bRstVoltageP6");
+NexButton bRstCurrentP6 = NexButton(6, 13, "bRstCurrentP6");
+NexText tMaxVoltageP6 = NexText(6, 8, "tMaxVoltageP6");
+NexText tMaxCurrentP6 = NexText(6, 10, "tMaxCurrentP6");
+NexText tkVP6 = NexText(6, 9, "tkVP6");
+NexText tAP6 = NexText(6, 11, "tAP6");
+NexButton bSoftP6 = NexButton(6, 2, "bSoftP6");
+NexButton bModP6 = NexButton(6, 3, "bModP6");
+NexText temP6 = NexText(6, 14, "temP6");
+NexText humP6 = NexText(6, 15, "humP6");
+NexButton bHomeP6 = NexButton(6, 1, "bHomeP6");
+// Page 7 = additional page
+NexPage page7 = NexPage(7, 0, "page7");
+NexText temP7 = NexText(7, 2, "temP7");
+NexText humP7 = NexText(7, 3, "humP7");
+NexButton bHomeP7 = NexButton(7, 1, "bHomeP7");
+// Page 8 = setting page
+NexPage page8 = NexPage(8, 0, "page8");
+NexButton bUI = NexButton(8, 2, "bUI");
+NexButton bKalibrasi = NexButton(8, 3, "bKalibrasi");
+NexButton bPinout = NexButton(8, 4, "bPinout");
+NexButton bConnect = NexButton(8, 5, "bConnect");
+NexButton bHomeP8 = NexButton(8, 1, "bHomeP8");
+// Page 9  = UI page
+NexPage page9 = NexPage(9, 0, "page9");
+NexButton bSaveP9 = NexButton(9, 6, "bSaveP9");
+NexButton bHomeP9 = NexButton(9, 2, "bHomeP9");
+// Page 10 = rawdata page atau kalibrasi
+NexPage page10 = NexPage(10, 0, "page10");
+NexText tAnalogV = NexText(10, 6, "tAnalogV");
+NexText tAnalogI = NexText(10, 8, "tAnalogI");
+NexText tOffsetV = NexText(10, 7, "tOffsetV");
+NexText tOffsetI = NexText(10, 9, "tOffsetI");
+NexButton bPlusV = NexButton(10, 10, "bPlusV");
+NexButton bMinV = NexButton(10, 11, "bMinV");
+NexButton bPlusI = NexButton(10, 12, "bPlusI");
+NexButton bMinI = NexButton(10, 13, "bMinI");
+NexButton bSaveP10 = NexButton(10, 14, "bSaveP10");
+NexButton bHomeP10 = NexButton(10, 2, "bHomeP10");
+// Page 11 = pinout page
+NexPage page11 = NexPage(11, 0, "page11");
+NexButton bHomeP11 = NexButton(11, 2, "bHomeP11");
+// Page 12 = connection page
+NexPage page12 = NexPage(12, 0, "page12");
+NexButton bHomeP12 = NexButton(12, 2, "bHomeP12");
+
+// Register a button object to the touch event list.  
+NexTouch *nex_listen_list[] = {
+  &page0,
+  &page1,
+  &bDriver,
+  &bKnob,
+  &bAdd,
+  &bSetting,
+  &bAwal,
+  &bRstVoltageP3,
+  &bRstCurrentP3,
+  &bHomeP3,
+  &bRstVoltageP4,
+  &bRstCurrentP4,
+  &bSoftP4,
+  &bRoughP4,
+  &bHomeP4,
+  &bRstVoltageP5,
+  &bRstCurrentP5,
+  &bModP5,
+  &bRoughP5,
+  &bHomeP5,
+  &bRstVoltageP6,
+  &bRstCurrentP6,
+  &bSoftP6,
+  &bModP6,
+  &bHomeP6,
+  &bHomeP7,
+  &bUI,
+  &bKalibrasi,
+  &bPinout,
+  &bConnect,
+  &bHomeP8,
+  &bSaveP9,
+  &bHomeP9,
+  &bPlusV,
+  &bMinV,
+  &bPlusI,
+  &bMinI,
+  &bSaveP10,
+  &bHomeP10,
+  &bHomeP11,
+  &bHomeP12,
+  NULL
+};
+
+void page0PopCallback(void *ptr) {
+  currentPage = 1; //welcome page to introduction page
+}
+
+void page1PopCallback(void *ptr) {
+  currentPage = 2; //introduction page to selection page
+}
+
+// Page 2 = selection page
+void bDriverPopCallback(void *ptr) {
+  currentPage = 3; //selection page to driver mode
+}
+void bKnobPopCallback(void *ptr) {
+  currentPage = 4; //selection page to knob moderate page
+}
+void bAddPopCallback(void *ptr) {
+  currentPage = 2; // selection page to additional page
+}
+void bSettingPopCallback(void *ptr) {
+  currentPage = 8; // selection page to setting page
+}
+void bAwalPopCallback(void *ptr) {
+  currentPage = 0; // selection page to welcome page
+}
+
+// Page 3 = driver mode
+void bRstVoltageP3PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tMaxVoltageP3PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tkVP3PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void bRstCurrentP3PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tMaxCurrentP3PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tAP3PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void bHomeP3PopCallback(void *ptr) {
+  currentPage = 2;
+}
+
+// Page 4 = moderate page
+void bRstVoltageP4PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tMaxVoltageP4PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tkVP4PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void bRstCurrentP4PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tMaxCurrentP4PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tAP4PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void bSoftP4PopCallback(void *ptr) {
+  currentPage = 5;
+}
+void bRoughP4PopCallback(void *ptr) {
+  currentPage = 6;
+}
+void bHomeP4PopCallback(void *ptr) {
+  currentPage = 2;
+}
+
+//Page 5 = soft page
+void bRstVoltageP5PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tMaxVoltageP5PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tkVP5PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void bRstCurrentP5PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tMaxCurrentP5PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tAP5PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void bModP5PopCallback(void *ptr) {
+  currentPage = 4;
+}
+void bRoughP5PopCallback(void *ptr) {
+  currentPage = 6;
+}
+void bHomeP5PopCallback(void *ptr) {
+  currentPage = 2;
+}
+
+// Page 6 = rough page
+void bRstVoltageP6PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tMaxVoltageP6PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void tkVP6PopCallback(void *ptr) {
+  holdMaxVoltage = 0;
+}
+void bRstCurrentP6PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tMaxCurrentP6PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void tAP6PopCallback(void *ptr) {
+  holdMaxCurrent = 0;
+}
+void bModP6PopCallback(void *ptr) {
+  currentPage = 4;
+}
+void bSoftP6PopCallback(void *ptr) {
+  currentPage = 5;
+}
+void bHomeP6PopCallback(void *ptr) {
+  currentPage = 2;
+}
+
+// Page 7 = additional page
+void bHomeP7PopCallback(void *ptr) {
+  currentPage = 2;
+}
+
+// Page 8 = setting page
+void bUIPopCallback(void *ptr) {
+  currentPage = 9;
+}
+void bKalibrasiPopCallback(void *ptr) {
+  currentPage = 10;
+}
+void bPinoutPopCallback(void *ptr) {
+  currentPage = 11;
+}
+void bConnectPopCallback(void *ptr) {
+  currentPage = 12;
+}
+void bHomeP8PopCallback(void *ptr) {
+  currentPage = 2;
+}
+
+// Page 9 = UI page
+void bSaveP9PopCallback(void *ptr) {
+  currentPage = 8;
+}
+void bHomeP9PopCallback(void *ptr) {
+  currentPage = 8;
+}
+
+// Page 10 = raw data atau kalibrasi
+void bPlusVPopCallback(void *ptr) {
+  // increase voltage offset point
+  offsetVoltage ++;
+}
+void bMinVPopCallback(void *ptr) {
+  // increase voltage offset point
+  offsetVoltage --;
+}
+void bPlusIPopCallback(void *ptr) {
+  // increase current offset point
+  offsetCurrent ++;
+}
+void bMinIPopCallback(void *ptr) {
+  // increase current offset point
+  offsetCurrent --;
+}
+void bSaveP10PopCallback(void *ptr) {
+  currentPage = 8;
+}
+void bHomeP10PopCallback(void *ptr) {
+  currentPage = 8;
+}
+
+// Page 11 = pinout page
+void bHomeP11PopCallback(void *ptr) {
+  currentPage = 8;
+}
+
+// Page 12 = connect page
+void bHomeP12PopCallback(void *ptr) {
+  currentPage = 8;
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
+  currentPage = 0;
+
+  boolean wifiFound = false;
+  int i, n;
+
+  // Set WiFi to station mode and disconnect from an AP if it was previously connected
+  WiFi.mode(WIFI_AP);
+  WiFi.disconnect();
+  delay(100);
+  Serial.println("Setup done");
+
+  // WiFi.scanNetworks will return the number of networks found
+  Serial.println(F("scan start"));
+  int nbVisibleNetworks = WiFi.scanNetworks();
+  Serial.println(F("scan done"));
+  if (nbVisibleNetworks == 0) {
+    Serial.println(F("no networks found. Reset to try again"));
+    while (true); // no need to go further, hang in there, will auto launch the Soft WDT reset
+  }
+
+  // if you arrive here at least some networks are visible
+  Serial.print(nbVisibleNetworks);
+  Serial.println(" network(s) found");
+
+  // check if we recognize one by comparing the visible networks one by one with our list of known networks
+  for (i = 0; i < nbVisibleNetworks; ++i) {
+    Serial.println(WiFi.SSID(i)); // Print current SSID
+    for (n = 0; n < KNOWN_SSID_COUNT; n++) { // walk through the list of known SSID and check for a match
+      if (strcmp(KNOWN_SSID[n], WiFi.SSID(i).c_str())) {
+        Serial.print(F("\tNot matching "));
+        Serial.println(KNOWN_SSID[n]);
+      } else { // we got a match
+        wifiFound = true;
+        break; // n is the network index we found
+      }
+    } // end for each known wifi SSID
+    if (wifiFound) break; // break from the "for each visible network" loop
+  } // end for each visible network
+
+  if (!wifiFound) {
+    Serial.println(F("no Known network identified. Reset to try again"));
+    while (true); // no need to go further, hang in there, will auto launch the Soft WDT reset
+  }
+
+  // if you arrive here you found 1 known SSID
+  Serial.print(F("\nConnecting to "));
+  Serial.println(KNOWN_SSID[n]);
+
+  // We try to connect to the WiFi network we found
+  WiFi.begin(KNOWN_SSID[n], KNOWN_PASSWORD[n]);
+  
+  if (KNOWN_SSID[n] == "Nokia Deny"){
+    ssidState = 1;
+  } else if (KNOWN_SSID[n] == "INFORMATION CENTER"){
+    ssidState = 2;
+  } else if (KNOWN_SSID[n] == "Dasar"){
+    ssidState = 3;
+  } else if (KNOWN_SSID[n] == "Rumah No 30"){
+    ssidState = 4;
+  } else if (KNOWN_SSID[n] == "LAB-TTAT"){
+    ssidState = 5;
+  } else {
+    ssidState = 6;
+  }
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+
+  // SUCCESS, you are connected to the known WiFi network
+  Serial.println(F("WiFi connected, your IP address is "));
+  Serial.println(WiFi.localIP());
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Hi! I am ESP32.");
+  });
+
+  AsyncElegantOTA.begin(&server);    // Start ElegantOTA
+  server.begin();
+  Serial.println("HTTP server started");
+
+  dht.begin();
+  nexInit();
+
+  // Register the pop event callback function of the components
+  page0.attachPop(page0PopCallback, &page0);
+  page1.attachPop(page1PopCallback, &page1);
+  // page 2 = selection page
+  bDriver.attachPop(bDriverPopCallback, &bDriver);
+  bKnob.attachPop(bKnobPopCallback, &bKnob);
+  bAdd.attachPop(bAddPopCallback, &bAdd);
+  bSetting.attachPop(bSettingPopCallback, &bSetting);
+  bAwal.attachPop(bAwalPopCallback, &bAwal);
+  // page 3 = driver mode
+  bRstVoltageP3.attachPop(bRstVoltageP3PopCallback, &bRstVoltageP3);
+  tMaxVoltageP3.attachPop(tMaxVoltageP3PopCallback, &tMaxVoltageP3);
+  tkVP3.attachPop(tkVP3PopCallback, &tkVP3);
+  bRstCurrentP3.attachPop(bRstCurrentP3PopCallback, &bRstCurrentP3);
+  tMaxCurrentP3.attachPop(tMaxCurrentP3PopCallback, &tMaxCurrentP3);
+  tAP3.attachPop(tAP3PopCallback, &tAP3);
+  bHomeP3.attachPop(bHomeP3PopCallback, &bHomeP3);
+  // page 4 = moderate mode
+  bRstVoltageP4.attachPop(bRstVoltageP4PopCallback, &bRstVoltageP4);
+  tMaxVoltageP4.attachPop(tMaxVoltageP4PopCallback, &tMaxVoltageP4);
+  tkVP4.attachPop(tkVP4PopCallback, &tkVP4);
+  bRstCurrentP4.attachPop(bRstCurrentP4PopCallback, &bRstCurrentP4);
+  tMaxCurrentP4.attachPop(tMaxCurrentP4PopCallback, &tMaxCurrentP4);
+  tAP4.attachPop(tAP4PopCallback, &tAP4);
+  bSoftP4.attachPop(bSoftP4PopCallback, &bSoftP4);
+  bRoughP4.attachPop(bRoughP4PopCallback, &bRoughP4);
+  bHomeP4.attachPop(bHomeP4PopCallback, &bHomeP4);
+  // page 5 = soft page
+  bRstVoltageP5.attachPop(bRstVoltageP5PopCallback, &bRstVoltageP5);
+  tMaxVoltageP5.attachPop(tMaxVoltageP5PopCallback, &tMaxVoltageP5);
+  tkVP5.attachPop(tkVP5PopCallback, &tkVP5);
+  bRstCurrentP5.attachPop(bRstCurrentP5PopCallback, &bRstCurrentP5);
+  tMaxCurrentP5.attachPop(tMaxCurrentP5PopCallback, &tMaxCurrentP5);
+  tAP5.attachPop(tAP5PopCallback, &tAP5);
+  bModP5.attachPop(bModP5PopCallback, &bModP5);
+  bRoughP5.attachPop(bRoughP5PopCallback, &bRoughP5);
+  bHomeP5.attachPop(bHomeP5PopCallback, &bHomeP5);
+  // page 6 = rough page
+  bRstVoltageP6.attachPop(bRstVoltageP6PopCallback, &bRstVoltageP6);
+  tMaxVoltageP6.attachPop(tMaxVoltageP6PopCallback, &tMaxVoltageP6);
+  tkVP6.attachPop(tkVP6PopCallback, &tkVP6);
+  bRstCurrentP6.attachPop(bRstCurrentP6PopCallback, &bRstCurrentP6);
+  tMaxCurrentP6.attachPop(tMaxCurrentP6PopCallback, &tMaxCurrentP6);
+  tAP6.attachPop(tAP6PopCallback, &tAP6);
+  bSoftP6.attachPop(bSoftP6PopCallback, &bSoftP6);
+  bModP6.attachPop(bModP6PopCallback, &bModP6);
+  bHomeP6.attachPop(bHomeP6PopCallback, &bHomeP6);
+  // page 7 = additional page
+  bHomeP7.attachPop(bHomeP7PopCallback, &bHomeP7);
+  // page 8 = setting page
+  bUI.attachPop(bUIPopCallback, &bUI);
+  bKalibrasi.attachPop(bKalibrasiPopCallback, &bKalibrasi);
+  bPinout.attachPop(bPinoutPopCallback, &bPinout);
+  bConnect.attachPop(bConnectPopCallback, &bConnect);
+  bHomeP8.attachPop(bHomeP8PopCallback, &bHomeP8);
+  // page 9 = UI page
+  bSaveP9.attachPop(bSaveP9PopCallback, &bSaveP9);
+  bHomeP9.attachPop(bSaveP9PopCallback, &bHomeP9);
+  // page 10 = rawa data atau kalibrasi
+  bPlusV.attachPop(bPlusVPopCallback, &bPlusV);
+  bMinV.attachPop(bMinVPopCallback, &bMinV);
+  bPlusI.attachPop(bPlusIPopCallback, &bPlusI);
+  bMinI.attachPop(bMinIPopCallback, &bMinI);
+  bSaveP10.attachPop(bSaveP10PopCallback, &bSaveP10);
+  bHomeP10.attachPop(bHomeP10PopCallback, &bHomeP10);
+  // page 11 = pinout page
+  bHomeP11.attachPop(bHomeP11PopCallback, &bHomeP11);
+  // page 12 = connect page
+  bHomeP12.attachPop(bHomeP12PopCallback, &bHomeP12);
+
+  ledcSetup(channel, freq, resolution);
+  ledcAttachPin(SDApin, channel);
+  ledcWrite(channel, dutyCycle0);
+
+  pinMode(relay1, OUTPUT);
+  pinMode(relay2, OUTPUT);
+  pinMode(relay3, OUTPUT);
+  pinMode(relay4, OUTPUT);
+
+  for (int thisReading_voltage = 0; thisReading_voltage < numReadings; thisReading_voltage ++) {
+    readings_voltage[thisReading_voltage] = 0;
+  }
+
+  for (int thisReading_current = 0; thisReading_current < numReadings; thisReading_current ++) {
+    readings_current[thisReading_current] = 0;
+  }
+}
+
+void loop() {
+  int h = dht.readHumidity();
+  int t = dht.readTemperature();
+
+  maxAnalogVoltageValue = 0;
+  //maxAnalogCurrentValue = 0;
+
+  for ( int i = 0; i < 100; i++ ) {
+    analogVoltageValue = analogRead(analogVoltagePin);
+    if (analogVoltageValue > 2000) {
+      voltageValue[i] = analogVoltageValue;
+      //maxAnalogVoltageValue = 0;
+      if (voltageValue[i] > maxAnalogVoltageValue) {
+        maxAnalogVoltageValue = voltageValue[i];
+      }
+    } else {
+      voltageValue[i] = 0;
+    }
+    analogCurrentValue = analogRead(analogCurrentPin);
+    if (analogCurrentValue > 2000) {
+      currentValue[i] = analogCurrentValue;
+      maxAnalogCurrentValue = 0;
+      if (currentValue[i] > maxAnalogCurrentValue) {
+        maxAnalogCurrentValue = currentValue[i];
+      }
+    } else {
+      currentValue[i] = 0;
+    }
+    //delay(1);
+  }
+
+  total_voltage = total_voltage - readings_voltage[readIndex_voltage];
+  readings_voltage[readIndex_voltage] = maxAnalogVoltageValue + offsetVoltage;
+  total_voltage = total_voltage + readings_voltage[readIndex_voltage];
+  readIndex_voltage = readIndex_voltage + 1;
+
+  if (readIndex_voltage >= numReadings) {
+    readIndex_voltage = 0;
+  }
+  maxAnalogVoltageValue = total_voltage / numReadings;
+
+  if (maxAnalogVoltageValue != 0) {
+    if (maxAnalogVoltageValue > 3630){
+      voltageRMS = ((maxAnalogVoltageValue * 6.9318) - 7093.8)/250;
+    } else if (maxAnalogVoltageValue > 3373) {
+      voltageRMS = ((maxAnalogVoltageValue * 7.7658) - 10103)/250;
+    } else if (maxAnalogVoltageValue > 3161) {
+      voltageRMS = ((maxAnalogVoltageValue * 9.2299) - 15061)/250;
+    } else if (maxAnalogVoltageValue > 2961) {
+      voltageRMS = ((maxAnalogVoltageValue * 10.409) - 18812)/250;
+    } else if (maxAnalogVoltageValue > 2793) {
+      voltageRMS = ((maxAnalogVoltageValue * 11.926) - 23312)/250;
+    } else if (maxAnalogVoltageValue > 2641) {
+      voltageRMS = ((maxAnalogVoltageValue * 11.995) - 23514)/250;
+    } else if (maxAnalogVoltageValue > 2384) {
+      voltageRMS = ((maxAnalogVoltageValue * 12.273) - 24257)/250;
+    } else {
+      voltageRMS = ((maxAnalogVoltageValue * 12.743) - 25413)/250;
+    }
+  } else {
+    voltageRMS = 0;
+  }
+
+  total_current = total_current - readings_current[readIndex_current];
+  readings_current[readIndex_current] = maxAnalogCurrentValue + offsetCurrent;
+  total_current = total_current + readings_current[readIndex_current];
+  readIndex_current = readIndex_current + 1;
+
+  if (readIndex_current >= numReadings) {
+    readIndex_current = 0;
+  }
+  maxAnalogCurrentValue = total_current / numReadings;
+
+  if (maxAnalogCurrentValue != 0) {
+    currentRMS = (maxAnalogCurrentValue * 0.0177) - 35.312;
+  } else {
+    currentRMS = 0;
+  }
+
+  // hold max value
+  if (voltageRMS > holdMaxVoltage) {
+    holdMaxVoltage = voltageRMS;
+  }
+  if (currentRMS > holdMaxCurrent) {
+    holdMaxCurrent = currentRMS;
+  }
+
+  if (currentPage == 0) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+
+    Serial2.print("tSSID.txt=\"");
+    if (ssidState == 1) {
+      Serial2.print("Nokia Deny");
+    } else if (ssidState == 2) {
+      Serial2.print("INFORMATION CENTER");
+    } else if (ssidState == 3) {
+      Serial2.print("Dasar");
+    } else if (ssidState == 4) {
+      Serial2.print("Rumah No 30");
+    } else if (ssidState == 5) {
+      Serial2.print("LAB-TTAT");
+    } else {
+      Serial2.print("Unidentified");
+    }
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+
+    Serial2.print("tAddress.txt=\"");
+    Serial2.print(WiFi.localIP());
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);    
+  }
+  if (currentPage == 1) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+  }
+  if (currentPage == 2) {
+    ledcWrite(channel, 0);
+    digitalWrite(relay1, LOW);
+  }
+  // page 3 = driver mode
+  if (currentPage == 3) {
+    Serial2.print("tVoltageP3.txt=\"");
+    Serial2.print(voltageRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tCurrentP3.txt=\"");
+    Serial2.print(currentRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxVoltageP3.txt=\"");
+    Serial2.print(holdMaxVoltage, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxCurrentP3.txt=\"");
+    Serial2.print(holdMaxCurrent, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("temP3.txt=\"");
+    Serial2.print(t);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("humP3.txt=\"");
+    Serial2.print(h);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+
+    ledcWrite(channel, dutyCycleDriver);
+    if (currentRMS > currentProtection){
+      digitalWrite(relay1, LOW);
+    } else {
+      digitalWrite(relay1, HIGH);
+    }
+  }
+  // page 4 = moderate page
+  if (currentPage == 4) {
+    Serial2.print("tVoltageP4.txt=\"");
+    Serial2.print(voltageRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tCurrentP4.txt=\"");
+    Serial2.print(currentRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxVoltageP4.txt=\"");
+    Serial2.print(holdMaxVoltage, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxCurrentP4.txt=\"");
+    Serial2.print(holdMaxCurrent, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("temP4.txt=\"");
+    Serial2.print(t);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("humP4.txt=\"");
+    Serial2.print(h);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+
+    ledcWrite(channel, dutyCycleMod);
+    if (currentRMS > currentProtection){
+      digitalWrite(relay1, LOW);
+    } else {
+      digitalWrite(relay1, HIGH);
+    }
+  }
+  // page 5 = soft page
+  if (currentPage == 5) {
+    Serial2.print("tVoltageP5.txt=\"");
+    Serial2.print(voltageRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tCurrentP5.txt=\"");
+    Serial2.print(currentRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxVoltageP5.txt=\"");
+    Serial2.print(holdMaxVoltage, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxCurrentP5.txt=\"");
+    Serial2.print(holdMaxCurrent, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("temP5.txt=\"");
+    Serial2.print(t);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("humP5.txt=\"");
+    Serial2.print(h);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+
+    ledcWrite(channel, dutyCycleSoft);
+    if (currentRMS > currentProtection){
+      digitalWrite(relay1, LOW);
+    } else {
+      digitalWrite(relay1, HIGH);
+    }
+  }
+  // page 6 = rough page
+  if (currentPage == 6) {
+    Serial2.print("tVoltageP6.txt=\"");
+    Serial2.print(voltageRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tCurrentP6.txt=\"");
+    Serial2.print(currentRMS, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxVoltageP6.txt=\"");
+    Serial2.print(holdMaxVoltage, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tMaxCurrentP6.txt=\"");
+    Serial2.print(holdMaxCurrent, decimalPrecision);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("temP6.txt=\"");
+    Serial2.print(t);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("humP6.txt=\"");
+    Serial2.print(h);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+
+    ledcWrite(channel, dutyCycleRough);
+    if (currentRMS > currentProtection){
+      digitalWrite(relay1, LOW);
+    } else {
+      digitalWrite(relay1, HIGH);
+    }
+  }
+  // page 7 = additional page
+  if (currentPage == 7) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+
+    Serial2.print("temP6.txt=\"");
+    Serial2.print(t);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("humP6.txt=\"");
+    Serial2.print(h);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+  }
+  // page 8 = setting page
+  if (currentPage == 8) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+  }
+  // page 9 = UI page
+  if (currentPage == 9) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+  }
+  // page 10 = raw data atau kalibrasi
+  if (currentPage == 10) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+
+    Serial2.print("tAnalogV.txt=\"");
+    Serial2.print(maxAnalogVoltageValue);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tAnalogI.txt=\"");
+    Serial2.print(maxAnalogCurrentValue);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tOffsetV.txt=\"");
+    Serial2.print(offsetVoltage);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.print("tOffsetI.txt=\"");
+    Serial2.print(offsetCurrent);
+    Serial2.print("\"");
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+    Serial2.write(0xff);
+  }
+  // page 11 = pinout page
+  if (currentPage == 11) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+  }
+  // page 12 = connection page
+  if (currentPage == 12) {
+    ledcWrite(channel, dutyCycle0);
+    digitalWrite(relay1, LOW);
+  }
+
+  nexLoop(nex_listen_list);
+  AsyncElegantOTA.loop();
+  //delay(100);
+}
+

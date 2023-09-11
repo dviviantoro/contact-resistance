@@ -1,0 +1,147 @@
+/*
+left
+ADC0  PWMCOM2
+
+right
+GPIO16  relay1
+GPIO15  scl
+GPIO4   sda
+GPIO0   relay2
+GPIO2   relay3
+GPIO14  DO1
+GPIO12  PWMCOM1
+GPIO13  Rx2
+GPIO15  Tx2
+GPIO3   Rx1
+GPIO1   Tx1
+*/
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_ADS1X15.h>
+
+Adafruit_ADS1115 ads1;  // current measurement
+Adafruit_ADS1115 ads2;  // voltage measurement
+
+double analogCurrentValue = 0;
+int currentValue[50];
+int maxAnalogCurrentValue = 0;
+double currentRMS = 0;
+
+const int numReadings = 10;
+int readings_current[numReadings];
+int readIndex_current = 0;
+double total_current = 0;
+double average_current = 0;
+int realCurrent = 0;
+
+double analogVoltageValue = 0;
+int voltageValue[50];
+int maxAnalogVoltageValue = 0;
+double voltageRMS = 0;
+
+int readings_voltage[numReadings];
+int readIndex_voltage = 0;
+double total_voltage = 0;
+double average_voltage = 0;
+int realVoltage = 0;
+
+void setup(void)
+{
+  Serial.begin(115200);
+  Serial.println("Hello!");
+
+  Serial.println("Getting single-ended readings from AIN0..3");
+  Serial.println("ADC Range: +/- 6.144V (1 bit = 3mV/ADS1015, 0.1875mV/ADS1115)");
+
+  ads1.setGain(GAIN_TWOTHIRDS);
+  ads2.setGain(GAIN_TWOTHIRDS);
+  ads1.begin(0x48);
+  ads2.begin(0x49);
+
+  for (int thisReading_current = 0; thisReading_current < numReadings; thisReading_current ++) {
+    readings_current[thisReading_current] = 0;
+  }
+  for (int thisReading_voltage = 0; thisReading_voltage < numReadings; thisReading_voltage ++) {
+    readings_voltage[thisReading_voltage] = 0;
+  }
+}
+
+void loop(void)
+{
+  int16_t adc0, adc1, adc2, adc3;
+  float volts0, volts1, volts2, volts3;
+
+  adc0 = ads1.readADC_SingleEnded(0);
+  adc1 = ads1.readADC_SingleEnded(1); //current
+  adc2 = ads1.readADC_SingleEnded(2);
+  adc3 = ads1.readADC_SingleEnded(3);
+
+  volts0 = ads1.computeVolts(adc0);
+  volts1 = ads1.computeVolts(adc1);
+  volts2 = ads1.computeVolts(adc2);
+  volts3 = ads1.computeVolts(adc3);
+
+  // Serial.println("-----------------------------------------------------------");
+  // Serial.print("AIN0: "); Serial.print(adc0); Serial.print("  "); Serial.print(volts0); Serial.println("V");
+  // Serial.print("AIN1: "); Serial.print(adc1); Serial.print("  "); Serial.print(volts1); Serial.println("V");
+  // Serial.print("AIN2: "); Serial.print(adc2); Serial.print("  "); Serial.print(volts2); Serial.println("V");
+  // Serial.print("AIN3: "); Serial.print(adc3); Serial.print("  "); Serial.print(volts3); Serial.println("V");
+
+  int16_t adc4, adc5, adc6, adc7;
+  float volts4, volts5, volts6, volts7;
+  
+  adc4 = ads2.readADC_SingleEnded(0);
+  adc5 = ads2.readADC_SingleEnded(1);
+  adc6 = ads2.readADC_SingleEnded(2);
+  adc7 = ads2.readADC_SingleEnded(3);
+
+  volts4 = ads2.computeVolts(adc4);
+  volts5 = ads2.computeVolts(adc5);
+  volts6 = ads2.computeVolts(adc6);
+  volts7 = ads2.computeVolts(adc7);
+  
+  // Serial.println("-----------------------------------------------------------");
+  // Serial.print("AIN4: "); Serial.print(adc4); Serial.print("  "); Serial.print(volts4); Serial.println("V");
+  // Serial.print("AIN5: "); Serial.print(adc5); Serial.print("  "); Serial.print(volts5); Serial.println("V");
+  // Serial.print("AIN6: "); Serial.print(adc6); Serial.print("  "); Serial.print(volts6); Serial.println("V");
+  // Serial.print("AIN7: "); Serial.print(adc7); Serial.print("  "); Serial.print(volts7); Serial.println("V");
+
+  int n = 20;
+
+  maxAnalogCurrentValue = 0;
+  for ( int i = 0; i < n; i++ ) {
+    // analogCurrentValue = ads1.readADC_SingleEnded(1); //current
+    analogCurrentValue = ads2.readADC_SingleEnded(1);
+    // analogCurrentValue = ads1.readADC_SingleEnded(2);
+    if (analogCurrentValue > 0) {
+      currentValue[i] = analogCurrentValue;
+    } else {
+      currentValue[i] = 0;
+    }
+    delay(1);
+  }
+
+  for ( int i = 0; i < n; i++ ) {
+    if (currentValue[i] > maxAnalogCurrentValue) {
+      maxAnalogCurrentValue = currentValue[i];
+    }
+    currentValue[i] = 0;
+  }
+
+  // total_current = total_current - readings_current[readIndex_current];
+  // readings_current[readIndex_current] = maxAnalogCurrentValue;
+  // total_current = total_current + readings_current[readIndex_current];
+  // readIndex_current = readIndex_current + 1;
+
+  // if (readIndex_current >= numReadings) {
+  //   readIndex_current = 0;
+  // }
+  // maxAnalogCurrentValue = total_current / numReadings;
+
+  Serial.println(maxAnalogCurrentValue);
+  // // Serial.println(maxAnalogVoltageValue);
+
+  delay(50);
+}

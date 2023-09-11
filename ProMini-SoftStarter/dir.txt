@@ -1,0 +1,5 @@
+serial communication
+https://create.arduino.cc/projecthub/pawan-kumar3/serial-communication-between-nodemcu-and-arduino-640819
+
+soft starter AC
+https://www.instructables.com/How-to-Make-an-AC-Softstarter/

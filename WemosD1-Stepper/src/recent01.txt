@@ -1,0 +1,34 @@
+// komunikasi serial
+// pin intterupt
+
+/*
+ADC0    = PWMCOM1
+GPIO16  = DIR
+GPIO14  = PUL
+GPIO12  = ENA
+GPIO13  = L
+GPIO15  = R
+
+GPIO01  = Rx1
+GPIO03  = Tx1
+GPIO05  = N/A
+GPIO06  = N/A
+GPIO00  = PWMCOM2
+GPIO02  = SW
+*/
+
+#include <Arduino.h>
+
+void setup() {
+  // Open serial communications and wait for port to open:
+  Serial.begin(115200);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+}
+
+void loop() { // run over and over
+  if (Serial.available()) {
+    Serial.write(Serial.read());
+  }
+}

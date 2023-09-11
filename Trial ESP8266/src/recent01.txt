@@ -1,0 +1,75 @@
+#include <Arduino.h>
+#include <Adafruit_ADS1X15.h>
+#include <SPI.h>
+
+Adafruit_ADS1115 ads1;  // current measurement
+Adafruit_ADS1115 ads2;  // voltage measurement
+int16_t adc1, adc5;
+
+int maxAnalogCurrentValue = 0;
+int currentValue = 0;
+int n = 500;
+#define relay1 23
+// unsigned long waktu;
+
+double analogCurrentValue = 0;
+int maxAnalogVoltageValue = 0;
+
+const int numReadings = 5;
+
+int readings_current[numReadings];
+int readIndex_current = 0;
+double total_current = 0;
+double average_current = 0;
+int realCurrent = 0;
+
+const int ledPin =  LED_BUILTIN;
+int ledState = LOW;
+unsigned long previousMillis = 0;
+const long interval = 1000;
+
+void setup(){
+  Serial.begin(115200);
+  
+  ads1.setGain(GAIN_TWOTHIRDS);
+  ads2.setGain(GAIN_TWOTHIRDS);
+  ads1.begin(0x48);
+  ads2.begin(0x49);
+
+  pinMode(ledPin, OUTPUT);
+  pinMode(relay1, OUTPUT);
+
+  for (int thisReading_current = 0; thisReading_current < numReadings; thisReading_current ++) {
+    readings_current[thisReading_current] = 0;
+  }
+}
+
+void loop(){
+  adc1 = ads1.readADC_SingleEnded(1); // current measuremnet
+  adc5 = ads2.readADC_SingleEnded(1); // voltage measurement
+  
+    maxAnalogCurrentValue = 0;
+    for( int i = 0; i < n; i ++ ) {
+      adc1 = ads1.readADC_SingleEnded(1); // current measuremnet
+      currentValue = adc1;
+
+      if (currentValue > maxAnalogCurrentValue) {
+        maxAnalogCurrentValue = currentValue;
+      } 
+      // delayMicroseconds(1);
+      // delay(1);
+    }
+
+    total_current = total_current - readings_current[readIndex_current];
+    readings_current[readIndex_current] = maxAnalogCurrentValue;
+    total_current = total_current + readings_current[readIndex_current];
+    readIndex_current = readIndex_current + 1;
+
+    if (readIndex_current >= numReadings) {
+      readIndex_current = 0;
+    }
+    maxAnalogCurrentValue = total_current / numReadings;
+
+    Serial.println(maxAnalogCurrentValue);
+    digitalWrite(relay1, HIGH);  
+}

@@ -1,0 +1,28 @@
+#include <Arduino.h>
+#include <SoftwareSerial.h>
+
+#define HMISerial_Tx 15
+#define HMISerial_Rx 13
+
+SoftwareSerial HMISerial;
+
+#define LED 2
+
+char mystr[5] = "Fara"; //String data
+
+// const char* ssid = "Rumah no 30";
+// const char* password = "heavyduty";
+
+void setup(void) {
+  pinMode(LED, OUTPUT);
+  Serial.begin(115200);
+  HMISerial.begin(9600, SWSERIAL_8N1, HMISerial_Tx, HMISerial_Rx);
+}
+
+void loop(void) {
+  HMISerial.write(mystr,5);
+  digitalWrite(LED, LOW); // Turn the LED on (Note that LOW is the voltage level)
+  delay(100); // Wait for a second
+  digitalWrite(LED, HIGH); // Turn the LED off by making the voltage HIGH
+  delay(100); // Wait for two seconds
+}

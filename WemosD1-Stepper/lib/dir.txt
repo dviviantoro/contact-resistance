@@ -1,0 +1,25 @@
+blink
+https://electrosome.com/esp8266-arduino-programming-led-blink/
+
+ota
+https://randomnerdtutorials.com/esp8266-nodemcu-ota-over-the-air-arduino/
+
+soft restart
+https://techtutorialsx.com/2017/12/29/esp8266-arduino-software-restart/
+
+hardware serial
+https://circuits4you.com/2018/12/31/esp32-hardware-serial2-example/
+
+esp wifi multi
+https://forum.arduino.cc/index.php?topic=455414.0
+
+control stepper
+https://bemelab.com/2015/03/09/aduino-stepper-motor-acceleration-and-rotary-encoder-control/
+https://www.makerguides.com/drv8825-stepper-motor-driver-arduino-tutorial/
+https://lastminuteengineers.com/drv8825-stepper-motor-driver-arduino-tutorial/
+
+while function
+https://www.arduino.cc/reference/en/language/structure/control-structure/while/
+
+serial communication
+https://forum.arduino.cc/t/serial-read-and-serial-write-between-2-arduino-uno/560976/4

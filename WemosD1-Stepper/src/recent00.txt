@@ -1,0 +1,200 @@
+// komunikasi serial
+// pin intterupt
+
+/*
+ADC0    = PWMCOM1
+GPIO16  = DIR
+GPIO14  = PUL
+GPIO12  = ENA
+GPIO13  = L
+GPIO15  = R
+
+GPIO01  = Rx1
+GPIO03  = Tx1
+GPIO05  = N/A
+GPIO06  = N/A
+GPIO00  = PWMCOM2
+GPIO02  = SW
+*/
+
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncElegantOTA.h>
+#include <AccelStepper.h>
+
+const char* KNOWN_SSID[] = {"Tablet Deny", "Rumah no 30"};
+const char* KNOWN_PASSWORD[] = {"bismillah", "heavyduty"};
+const int   KNOWN_SSID_COUNT = sizeof(KNOWN_SSID) / sizeof(KNOWN_SSID[0]);
+String namaWifi;
+
+AsyncWebServer server(80);
+
+// rotary encoder pinout
+#define DT 13
+#define CLK 15
+#define SW 2
+
+// drv8825 pinout
+#define dirPin 16
+#define stepPin 14
+#define enaPin 12
+#define motorInterfaceType 1
+
+AccelStepper stepper(motorInterfaceType, stepPin, dirPin);
+
+#define minLimitSwitch 1
+String serialRead;
+
+void setup(void) {
+  Serial.begin(115200);
+
+  boolean wifiFound = false;
+  int i, n;
+
+  // Set WiFi to station mode and disconnect from an AP if it was previously connected
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+  Serial.println("Setup done");
+
+  // WiFi.scanNetworks will return the number of networks found
+  Serial.println(F("scan start"));
+  int nbVisibleNetworks = WiFi.scanNetworks();
+  Serial.println(F("scan done"));
+  if (nbVisibleNetworks == 0) {
+    Serial.println(F("no networks found. Reset to try again"));
+    while (true); // no need to go further, hang in there, will auto launch the Soft WDT reset
+  }
+
+  // if you arrive here at least some networks are visible
+  Serial.print(nbVisibleNetworks);
+  Serial.println(" network(s) found");
+
+  // check if we recognize one by comparing the visible networks
+  // one by one with our list of known networks
+  for (i = 0; i < nbVisibleNetworks; ++i) {
+    Serial.println(WiFi.SSID(i)); // Print current SSID
+    for (n = 0; n < KNOWN_SSID_COUNT; n++) { // walk through the list of known SSID and check for a match
+      if (strcmp(KNOWN_SSID[n], WiFi.SSID(i).c_str())) {
+        Serial.print(F("\tNot matching "));
+        Serial.println(KNOWN_SSID[n]);
+      } else { // we got a match
+        wifiFound = true;
+        break; // n is the network index we found
+      }
+    } // end for each known wifi SSID
+    if (wifiFound) break; // break from the "for each visible network" loop
+  } // end for each visible network
+
+  if (!wifiFound) {
+    Serial.println(F("no Known network identified. Reset to try again"));
+    while (true); // no need to go further, hang in there, will auto launch the Soft WDT reset
+  }
+
+  // if you arrive here you found 1 known SSID
+  Serial.print(F("\nConnecting to "));
+  Serial.println(KNOWN_SSID[n]);
+
+  // We try to connect to the WiFi network we found
+  WiFi.begin(KNOWN_SSID[n], KNOWN_PASSWORD[n]);
+
+  if (KNOWN_SSID[n] == "Nokia Deny"){
+    namaWifi = "Nokia Deny";
+  } else if (KNOWN_SSID[n] == "Tablet Deny") {
+    namaWifi = "Tablet Deny";
+  } else {
+    namaWifi = "Dasar";
+  }
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+
+  // SUCCESS, you are connected to the known WiFi network
+  Serial.println(F("WiFi connected, your IP address is "));
+  Serial.println(WiFi.localIP());
+
+  // Start ElegantOTA
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Hi! I am Wemos D1");
+  });
+
+  AsyncElegantOTA.begin(&server);
+  server.begin();
+  Serial.println("HTTP server started");
+
+  stepper.setMaxSpeed(200);
+  stepper.setAcceleration(30);  
+}
+
+void loop(void) {
+  AsyncElegantOTA.loop();
+
+  if (1 == HIGH) {                  // min limit switch
+    stepper.setCurrentPosition(0);
+  }
+
+  if (serialRead 
+
+  // hitung stepnya agar nggak kelebihan 
+
+
+  /*
+  analogInput2 = analogRead(analogPin2);
+
+  if (analogInput2 > holdMaxVoltage) {
+    holdMaxVoltage = analogInput2;
+  }
+
+  if (analogInput2 < holdMinVoltage) {
+    holdMinVoltage = analogInput2;
+  }
+
+  if (analogInput2 > 990) {
+    digitalWrite(Enable_PIN, LOW);
+    currentState = 10;
+    mover = 50;
+  } else if (analogInput2 > 950) {
+    digitalWrite(Enable_PIN, LOW);
+    currentState = 9;
+    mover = 10;
+  } else if (analogInput2 > 900) {
+    digitalWrite(Enable_PIN, LOW);
+    currentState = 8;
+    mover = 1;
+  } else if (analogInput2 > 850) {
+    digitalWrite(Enable_PIN, HIGH);
+    currentState = 7;
+  } else {
+    currentState = 0;
+    digitalWrite(Enable_PIN, HIGH);
+  }
+
+  if (lastState != currentState) {
+    ESP.restart();
+  }
+
+  var = 0;
+  unsigned char result;
+
+  while (var < 1) {
+    unsigned char pinstate = (digitalRead(CLK) << 1) | digitalRead(DT);
+    state = ttable[state & 0xf][pinstate];
+    result=state&0x30;
+    if(result==DIR_CCW) counter++;
+    if(result==DIR_CW) counter--;
+
+    stepper.moveTo(counter * mover);
+    stepper.run();
+    
+    var++;
+  }
+
+  lastState = currentState;
+  //delay(5000);
+  */
+}

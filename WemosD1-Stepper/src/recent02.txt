@@ -1,0 +1,148 @@
+// TANPA OTA
+
+/*
+ADC0    = PWMCOM1
+GPIO16  = DIR
+GPIO14  = PUL
+GPIO12  = ENA
+GPIO13  = L
+GPIO15  = R
+
+GPIO01  = Rx1
+GPIO03  = Tx1
+GPIO05  = N/A
+GPIO06  = N/A
+GPIO00  = PWMCOM2
+GPIO02  = SW
+*/
+
+#include <Arduino.h>
+#include <AccelStepper.h>
+
+// rotary encoder pinout
+#define DT 13
+#define CLK 15
+#define SW 2
+
+// drv8825 pinout
+#define dirPin 16
+#define stepPin 14
+#define enaPin 12
+#define motorInterfaceType 1
+
+AccelStepper stepper(motorInterfaceType, stepPin, dirPin);
+int stepperPos = 0;
+#define minLimitSwitch 1
+int flag;
+String serialRead;
+
+#define LED 2
+char mystr;
+
+void setup(void) {
+  Serial.begin(115200);
+
+  pinMode(minLimitSwitch, INPUT);
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
+
+  // stepper.setMaxSpeed(200);
+  // stepper.setAcceleration(30);
+
+  stepper.setMaxSpeed(1000);
+	stepper.setAcceleration(50);
+	// stepper.setSpeed(200);
+	// stepper.moveTo(150);
+}
+
+void loop(void) {
+/*
+serial navigation:
+0 = decrease
+1 = increase
+2 = stop
+3 = reset
+*/
+
+  if (Serial.available() > 0) {
+    mystr = Serial.read();
+
+    if (mystr == '0' && digitalRead(minLimitSwitch) == LOW) {
+      stepper.stop();
+    } else if (mystr == '1' && digitalRead(minLimitSwitch) == LOW) {
+      stepper.setSpeed(400);
+      stepper.runSpeed();
+    } else if (mystr == '2' && digitalRead(minLimitSwitch) == LOW) {
+      stepper.stop();
+    } else if (mystr == '3' && digitalRead(minLimitSwitch) == LOW) {
+      stepper.stop();
+    } else if (mystr == '0' && digitalRead(minLimitSwitch) == HIGH) {
+      stepper.setSpeed(-400);
+      stepper.runSpeed();
+    } else if (mystr == '1' && digitalRead(minLimitSwitch) == HIGH) {
+      stepper.setSpeed(400);
+      stepper.runSpeed();
+    } else if (mystr == '2' && digitalRead(minLimitSwitch) == HIGH) {
+      stepper.stop();
+    } else if (mystr == '3' && digitalRead(minLimitSwitch) == HIGH) {
+      stepper.setSpeed(-400);
+      stepper.runSpeed();
+    } 
+  } else {
+    if (digitalRead(minLimitSwitch) == HIGH) {
+      stepper.setSpeed(-400);
+      stepper.runSpeed();
+    } else {
+      stepper.stop();
+      stepper.setCurrentPosition(stepperPos);
+    }
+  }
+
+  // CEK SERIAL KOMUNIKASI
+  // if (Serial.available() > 0) {
+  //   mystr = Serial.read();
+
+  //   if (mystr == '0') {
+  //     digitalWrite(LED, HIGH);
+  //   } else if (mystr == '1') {
+  //     digitalWrite(LED, LOW);
+  //   } else if (mystr == '2') {
+  //     digitalWrite(LED, HIGH);
+  //     // stepper.moveTo(100);
+  //     // stepper.runToPosition();
+  //   } else if (mystr == '3') {
+  //     digitalWrite(LED, LOW);
+  //     // stepper.moveTo(0);
+  //     // stepper.runToPosition();
+  //   } else if (mystr == '4') {
+  //     digitalWrite(LED, HIGH);
+  //   } else if (mystr == '5') {
+  //     digitalWrite(LED, LOW);
+  //   } else if (mystr == '6') {
+  //     digitalWrite(LED, HIGH);
+  //   } else if (mystr == '7') {
+  //     digitalWrite(LED, LOW);
+  //   } else if (mystr == '8') {
+  //     digitalWrite(LED, HIGH);
+  //   }
+  // }
+
+  // CEK STEPPER MOTOR
+  // stepper.moveTo(600);
+  // // Run to target position with set speed and acceleration/deceleration:
+  // stepper.runToPosition();
+  // delay(1000);
+  // // Move back to zero:
+  // stepper.moveTo(0);
+  // stepper.runToPosition();
+  // delay(1000);
+
+  // if (stepper.distanceToGo() == 0) 
+	// 	stepper.moveTo(-stepper.currentPosition());
+
+	// // Move the motor one step
+	// stepper.run();
+
+
+
+}

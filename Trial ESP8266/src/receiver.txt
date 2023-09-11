@@ -1,0 +1,52 @@
+#include <Arduino.h>
+
+#define LED 2
+char mystr[12]; //Initialized variable to store recieved data
+
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
+}
+
+void loop() {
+  Serial.print("Maulidina ");
+  Serial.readBytes(mystr,12);
+  String myString = String(mystr);
+  // Serial.println(myString);
+
+  // if (myString == "Farah") {
+  //   digitalWrite(LED, LOW);
+  //   Serial.println("Farah");
+  // } else {
+  //   digitalWrite(LED, HIGH);
+  //   Serial.println("Farah Aqila");
+  // }
+
+  if (myString == "moveDecCro") {
+    Serial.println("Farah");
+  }
+  else if (myString == "moveDecSmo") {
+    Serial.println("Aqila");
+  }
+  else if (myString == "moveIncCro") {
+    Serial.println("Durotul");
+  }
+  else if (myString == "moveIncSmo") {
+    Serial.println("Muntafiah");
+  }
+  else if (myString == "runInc") {
+    Serial.println("Bilqis");
+  }
+  else if (myString == "runDec") {
+    Serial.println("Latifah");
+  }
+  else if (myString == "stop") {
+    Serial.println("Bebek");
+  }
+  else {
+    Serial.println("BAGUS");
+  }
+  
+}
